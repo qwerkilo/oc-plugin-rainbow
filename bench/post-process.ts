@@ -375,6 +375,17 @@ const scenarios = [
     topRate: 0.03,
   }),
   createScenario({
+    name: "160x48 bg only",
+    width: 160,
+    height: 48,
+    cfg: { fg: false, bg: true, speed: 0.01, turns: 4.25, glow: 0.08 },
+    themeMode: { kind: "static", themes: [themeA] },
+    seed: 0x34ab98ef,
+    fgNeutralRate: 0.22,
+    bgNeutralRate: 0.72,
+    topRate: 0.16,
+  }),
+  createScenario({
     name: "80x24 theme flip",
     width: 80,
     height: 24,

@@ -242,6 +242,189 @@ const paintBlend = (
   buf[slot + 2] = prevB + (b - prevB) * amt;
 };
 
+const applyBoth = (
+  buffer: RainbowBuffer,
+  palette: number[],
+  paletteCount: number,
+  fgStep: number,
+  fgRow: number,
+  fgShift: number,
+  bgStep: number,
+  bgRow: number,
+  bgShift: number,
+  glow: number,
+  textR: number,
+  textG: number,
+  textB: number,
+  mutedR: number,
+  mutedG: number,
+  mutedB: number,
+  bg0r: number,
+  bg0g: number,
+  bg0b: number,
+  bg1r: number,
+  bg1g: number,
+  bg1b: number,
+  bg2r: number,
+  bg2g: number,
+  bg2b: number,
+  bg3r: number,
+  bg3g: number,
+  bg3b: number,
+) => {
+  const width = buffer.width;
+  const height = buffer.height;
+  const fg = buffer.buffers.fg;
+  const bg = buffer.buffers.bg;
+  const char = buffer.buffers.char;
+
+  for (let y = 0, cell = 0, slot = 0; y < height; y++) {
+    let fgPhase = y * fgRow + fgShift;
+    let bgPhase = y * bgRow + bgShift;
+
+    for (let x = 0; x < width; x++, cell++, slot += 4) {
+      const r = fg[slot]!;
+      const g = fg[slot + 1]!;
+      const b = fg[slot + 2]!;
+
+      if (
+        (Math.abs(r - textR) <= eps && Math.abs(g - textG) <= eps && Math.abs(b - textB) <= eps) ||
+        (Math.abs(r - mutedR) <= eps && Math.abs(g - mutedG) <= eps && Math.abs(b - mutedB) <= eps)
+      ) {
+        paintFull(fg, slot, palette, paletteCount, fgPhase);
+      }
+
+      const br = bg[slot]!;
+      const bgg = bg[slot + 1]!;
+      const bb = bg[slot + 2]!;
+      const matchBg =
+        (Math.abs(br - bg0r) <= eps && Math.abs(bgg - bg0g) <= eps && Math.abs(bb - bg0b) <= eps) ||
+        (Math.abs(br - bg1r) <= eps && Math.abs(bgg - bg1g) <= eps && Math.abs(bb - bg1b) <= eps) ||
+        (Math.abs(br - bg2r) <= eps && Math.abs(bgg - bg2g) <= eps && Math.abs(bb - bg2b) <= eps) ||
+        (Math.abs(br - bg3r) <= eps && Math.abs(bgg - bg3g) <= eps && Math.abs(bb - bg3b) <= eps);
+
+      if (matchBg) {
+        const rise = Math.sin((bgPhase - Math.floor(bgPhase)) * pi);
+        const amt = glow * (0.35 + 0.65 * rise * rise);
+        paintBlend(bg, slot, palette, paletteCount, bgPhase, amt);
+
+        if (
+          char[cell] === top &&
+          ((Math.abs(r - bg0r) <= eps && Math.abs(g - bg0g) <= eps && Math.abs(b - bg0b) <= eps) ||
+            (Math.abs(r - bg1r) <= eps && Math.abs(g - bg1g) <= eps && Math.abs(b - bg1b) <= eps) ||
+            (Math.abs(r - bg2r) <= eps && Math.abs(g - bg2g) <= eps && Math.abs(b - bg2b) <= eps) ||
+            (Math.abs(r - bg3r) <= eps && Math.abs(g - bg3g) <= eps && Math.abs(b - bg3b) <= eps))
+        ) {
+          paintBlend(fg, slot, palette, paletteCount, bgPhase, amt);
+        }
+      }
+
+      fgPhase += fgStep;
+      bgPhase += bgStep;
+    }
+  }
+};
+
+const applyFgOnly = (
+  buffer: RainbowBuffer,
+  palette: number[],
+  paletteCount: number,
+  fgStep: number,
+  fgRow: number,
+  fgShift: number,
+  textR: number,
+  textG: number,
+  textB: number,
+  mutedR: number,
+  mutedG: number,
+  mutedB: number,
+) => {
+  const width = buffer.width;
+  const height = buffer.height;
+  const fg = buffer.buffers.fg;
+
+  for (let y = 0, slot = 0; y < height; y++) {
+    let fgPhase = y * fgRow + fgShift;
+
+    for (let x = 0; x < width; x++, slot += 4) {
+      const r = fg[slot]!;
+      const g = fg[slot + 1]!;
+      const b = fg[slot + 2]!;
+      if (
+        (Math.abs(r - textR) <= eps && Math.abs(g - textG) <= eps && Math.abs(b - textB) <= eps) ||
+        (Math.abs(r - mutedR) <= eps && Math.abs(g - mutedG) <= eps && Math.abs(b - mutedB) <= eps)
+      ) {
+        paintFull(fg, slot, palette, paletteCount, fgPhase);
+      }
+      fgPhase += fgStep;
+    }
+  }
+};
+
+const applyBgOnly = (
+  buffer: RainbowBuffer,
+  palette: number[],
+  paletteCount: number,
+  bgStep: number,
+  bgRow: number,
+  bgShift: number,
+  glow: number,
+  bg0r: number,
+  bg0g: number,
+  bg0b: number,
+  bg1r: number,
+  bg1g: number,
+  bg1b: number,
+  bg2r: number,
+  bg2g: number,
+  bg2b: number,
+  bg3r: number,
+  bg3g: number,
+  bg3b: number,
+) => {
+  const width = buffer.width;
+  const height = buffer.height;
+  const fg = buffer.buffers.fg;
+  const bg = buffer.buffers.bg;
+  const char = buffer.buffers.char;
+
+  for (let y = 0, cell = 0, slot = 0; y < height; y++) {
+    let bgPhase = y * bgRow + bgShift;
+
+    for (let x = 0; x < width; x++, cell++, slot += 4) {
+      const r = fg[slot]!;
+      const g = fg[slot + 1]!;
+      const b = fg[slot + 2]!;
+      const br = bg[slot]!;
+      const bgg = bg[slot + 1]!;
+      const bb = bg[slot + 2]!;
+      const matchBg =
+        (Math.abs(br - bg0r) <= eps && Math.abs(bgg - bg0g) <= eps && Math.abs(bb - bg0b) <= eps) ||
+        (Math.abs(br - bg1r) <= eps && Math.abs(bgg - bg1g) <= eps && Math.abs(bb - bg1b) <= eps) ||
+        (Math.abs(br - bg2r) <= eps && Math.abs(bgg - bg2g) <= eps && Math.abs(bb - bg2b) <= eps) ||
+        (Math.abs(br - bg3r) <= eps && Math.abs(bgg - bg3g) <= eps && Math.abs(bb - bg3b) <= eps);
+
+      if (matchBg) {
+        const rise = Math.sin((bgPhase - Math.floor(bgPhase)) * pi);
+        const amt = glow * (0.35 + 0.65 * rise * rise);
+        paintBlend(bg, slot, palette, paletteCount, bgPhase, amt);
+
+        if (
+          char[cell] === top &&
+          ((Math.abs(r - bg0r) <= eps && Math.abs(g - bg0g) <= eps && Math.abs(b - bg0b) <= eps) ||
+            (Math.abs(r - bg1r) <= eps && Math.abs(g - bg1g) <= eps && Math.abs(b - bg1b) <= eps) ||
+            (Math.abs(r - bg2r) <= eps && Math.abs(g - bg2g) <= eps && Math.abs(b - bg2b) <= eps) ||
+            (Math.abs(r - bg3r) <= eps && Math.abs(g - bg3g) <= eps && Math.abs(b - bg3b) <= eps))
+        ) {
+          paintBlend(fg, slot, palette, paletteCount, bgPhase, amt);
+        }
+      }
+
+      bgPhase += bgStep;
+    }
+  }
+};
+
 export const createRainbowPostProcess = (theme: () => RainbowTheme, value: () => RainbowConfig) => {
   let time = 0;
   const cache: ThemeCache = {
@@ -284,9 +467,7 @@ export const createRainbowPostProcess = (theme: () => RainbowTheme, value: () =>
     const bg3g = bgMarks[10] ?? miss;
     const bg3b = bgMarks[11] ?? miss;
 
-    const width = buffer.width;
-    const height = buffer.height;
-    const invSpan = 1 / Math.max(1, width * dx + height * dy);
+    const invSpan = 1 / Math.max(1, buffer.width * dx + buffer.height * dy);
     const fgStep = dx * invSpan * cfg.turns;
     const fgRow = dy * invSpan * cfg.turns;
     const fgShift = time * 0.1;
@@ -294,79 +475,81 @@ export const createRainbowPostProcess = (theme: () => RainbowTheme, value: () =>
     const bgStep = dx * invSpan * blur;
     const bgRow = dy * invSpan * blur;
     const bgShift = time * 0.04 + 0.17;
-    const fg = buffer.buffers.fg;
-    const bg = buffer.buffers.bg;
-    const char = buffer.buffers.char;
     const palette = cache.palette;
     const paletteCount = cache.paletteCount;
 
-    for (let y = 0, cell = 0, slot = 0; y < height; y++) {
-      let fgPhase = y * fgRow + fgShift;
-      let bgPhase = y * bgRow + bgShift;
-
-      for (let x = 0; x < width; x++, cell++, slot += 4) {
-        const r = fg[slot]!;
-        const g = fg[slot + 1]!;
-        const b = fg[slot + 2]!;
-
-        if (
-          useFg &&
-          ((Math.abs(r - textR) <= eps &&
-            Math.abs(g - textG) <= eps &&
-            Math.abs(b - textB) <= eps) ||
-            (Math.abs(r - mutedR) <= eps &&
-              Math.abs(g - mutedG) <= eps &&
-              Math.abs(b - mutedB) <= eps))
-        ) {
-          paintFull(fg, slot, palette, paletteCount, fgPhase);
-        }
-
-        if (useBg) {
-          const br = bg[slot]!;
-          const bgg = bg[slot + 1]!;
-          const bb = bg[slot + 2]!;
-          const matchBg =
-            (Math.abs(br - bg0r) <= eps &&
-              Math.abs(bgg - bg0g) <= eps &&
-              Math.abs(bb - bg0b) <= eps) ||
-            (Math.abs(br - bg1r) <= eps &&
-              Math.abs(bgg - bg1g) <= eps &&
-              Math.abs(bb - bg1b) <= eps) ||
-            (Math.abs(br - bg2r) <= eps &&
-              Math.abs(bgg - bg2g) <= eps &&
-              Math.abs(bb - bg2b) <= eps) ||
-            (Math.abs(br - bg3r) <= eps &&
-              Math.abs(bgg - bg3g) <= eps &&
-              Math.abs(bb - bg3b) <= eps);
-
-          if (matchBg) {
-            const rise = Math.sin((bgPhase - Math.floor(bgPhase)) * pi);
-            const amt = cfg.glow * (0.35 + 0.65 * rise * rise);
-            paintBlend(bg, slot, palette, paletteCount, bgPhase, amt);
-
-            if (
-              char[cell] === top &&
-              ((Math.abs(r - bg0r) <= eps &&
-                Math.abs(g - bg0g) <= eps &&
-                Math.abs(b - bg0b) <= eps) ||
-                (Math.abs(r - bg1r) <= eps &&
-                  Math.abs(g - bg1g) <= eps &&
-                  Math.abs(b - bg1b) <= eps) ||
-                (Math.abs(r - bg2r) <= eps &&
-                  Math.abs(g - bg2g) <= eps &&
-                  Math.abs(b - bg2b) <= eps) ||
-                (Math.abs(r - bg3r) <= eps &&
-                  Math.abs(g - bg3g) <= eps &&
-                  Math.abs(b - bg3b) <= eps))
-            ) {
-              paintBlend(fg, slot, palette, paletteCount, bgPhase, amt);
-            }
-          }
-        }
-
-        if (useFg) fgPhase += fgStep;
-        if (useBg) bgPhase += bgStep;
-      }
+    if (useFg && useBg) {
+      applyBoth(
+        buffer,
+        palette,
+        paletteCount,
+        fgStep,
+        fgRow,
+        fgShift,
+        bgStep,
+        bgRow,
+        bgShift,
+        cfg.glow,
+        textR,
+        textG,
+        textB,
+        mutedR,
+        mutedG,
+        mutedB,
+        bg0r,
+        bg0g,
+        bg0b,
+        bg1r,
+        bg1g,
+        bg1b,
+        bg2r,
+        bg2g,
+        bg2b,
+        bg3r,
+        bg3g,
+        bg3b,
+      );
+      return;
     }
+
+    if (useFg) {
+      applyFgOnly(
+        buffer,
+        palette,
+        paletteCount,
+        fgStep,
+        fgRow,
+        fgShift,
+        textR,
+        textG,
+        textB,
+        mutedR,
+        mutedG,
+        mutedB,
+      );
+      return;
+    }
+
+    applyBgOnly(
+      buffer,
+      palette,
+      paletteCount,
+      bgStep,
+      bgRow,
+      bgShift,
+      cfg.glow,
+      bg0r,
+      bg0g,
+      bg0b,
+      bg1r,
+      bg1g,
+      bg1b,
+      bg2r,
+      bg2g,
+      bg2b,
+      bg3r,
+      bg3g,
+      bg3b,
+    );
   };
 };
