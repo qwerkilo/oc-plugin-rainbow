@@ -211,18 +211,6 @@ export const SettingsDialog = (props: {
           </span>
           <span style={{ fg: theme().textMuted }}>left/right</span>
         </text>
-        <text>
-          <span style={{ fg: theme().text }}>
-            <b>speed</b>{" "}
-          </span>
-          <span style={{ fg: theme().textMuted }}>0 stops animation</span>
-        </text>
-        <text>
-          <span style={{ fg: theme().text }}>
-            <b>tint</b>{" "}
-          </span>
-          <span style={{ fg: theme().textMuted }}>0 keeps backgrounds unchanged</span>
-        </text>
       </box>
     </box>
   );
