@@ -2,6 +2,8 @@
 
 Theme-aware rainbow post-processing for the OpenCode TUI.
 
+![Rainbow stripe preview](./assets/rainbow-stripe.svg)
+
 It adds:
 
 - animated foreground color bands for neutral text
