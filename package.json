@@ -17,6 +17,7 @@
     }
   },
   "scripts": {
+    "bench:post-process": "node --expose-gc --experimental-strip-types ./bench/post-process.ts",
     "fmt": "oxfmt --write .",
     "fmt:check": "oxfmt --check ."
   },
