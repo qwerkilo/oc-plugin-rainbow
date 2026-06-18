@@ -1,4 +1,5 @@
 const eps = 1 / 510;
+const eps16 = 2;
 const top = "▀".charCodeAt(0);
 const tilt = (25 * Math.PI) / 180;
 const dx = Math.cos(tilt);
@@ -38,8 +39,8 @@ export type RainbowBuffer = {
   height: number;
   buffers: {
     char: ArrayLike<number>;
-    fg: Float32Array;
-    bg: Float32Array;
+    fg: Float32Array | Uint16Array;
+    bg: Float32Array | Uint16Array;
   };
 };
 
@@ -49,6 +50,81 @@ type ThemeCache = {
   palette: number[];
   paletteCount: number;
   bgMarks: number[];
+};
+
+const isUint16 = (buf: Float32Array | Uint16Array): buf is Uint16Array => {
+  return buf instanceof Uint16Array;
+};
+
+const readColor = (buf: Float32Array | Uint16Array, slot: number): [number, number, number, number] => {
+  if (isUint16(buf)) {
+    return [buf[slot] / 255, buf[slot + 1] / 255, buf[slot + 2] / 255, buf[slot + 3] / 255];
+  }
+  return [buf[slot], buf[slot + 1], buf[slot + 2], buf[slot + 3]];
+};
+
+const writeColor = (buf: Float32Array | Uint16Array, slot: number, r: number, g: number, b: number) => {
+  if (isUint16(buf)) {
+    buf[slot] = Math.round(r * 255);
+    buf[slot + 1] = Math.round(g * 255);
+    buf[slot + 2] = Math.round(b * 255);
+  } else {
+    buf[slot] = r;
+    buf[slot + 1] = g;
+    buf[slot + 2] = b;
+  }
+};
+
+const paintFull = (
+  buf: Float32Array | Uint16Array,
+  slot: number,
+  palette: number[],
+  paletteCount: number,
+  phase: number,
+) => {
+  const pos = (phase - Math.floor(phase)) * paletteCount;
+  const idx = Math.floor(pos);
+  const gap = pos - idx;
+  const base = idx * 3;
+  const next = idx + 1 === paletteCount ? 0 : base + 3;
+  const baseR = palette[base]!;
+  const baseG = palette[base + 1]!;
+  const baseB = palette[base + 2]!;
+  const nextR = palette[next]!;
+  const nextG = palette[next + 1]!;
+  const nextB = palette[next + 2]!;
+  const r = baseR + (nextR - baseR) * gap;
+  const g = baseG + (nextG - baseG) * gap;
+  const b = baseB + (nextB - baseB) * gap;
+
+  writeColor(buf, slot, r, g, b);
+};
+
+const paintBlend = (
+  buf: Float32Array | Uint16Array,
+  slot: number,
+  palette: number[],
+  paletteCount: number,
+  phase: number,
+  amt: number,
+) => {
+  const pos = (phase - Math.floor(phase)) * paletteCount;
+  const idx = Math.floor(pos);
+  const gap = pos - idx;
+  const base = idx * 3;
+  const next = idx + 1 === paletteCount ? 0 : base + 3;
+  const baseR = palette[base]!;
+  const baseG = palette[base + 1]!;
+  const baseB = palette[base + 2]!;
+  const nextR = palette[next]!;
+  const nextG = palette[next + 1]!;
+  const nextB = palette[next + 2]!;
+  const r = baseR + (nextR - baseR) * gap;
+  const g = baseG + (nextG - baseG) * gap;
+  const b = baseB + (nextB - baseB) * gap;
+  const [prevR, prevG, prevB] = readColor(buf, slot);
+
+  writeColor(buf, slot, prevR + (r - prevR) * amt, prevG + (g - prevG) * amt, prevB + (b - prevB) * amt);
 };
 
 const colorInt = (value: number) => Math.round(value * 255);
@@ -184,63 +260,11 @@ const syncThemeCache = (cache: ThemeCache, theme: RainbowTheme) => {
   cache.bgMarks = bgMarks;
 };
 
-const paintFull = (
-  buf: Float32Array,
-  slot: number,
-  palette: number[],
-  paletteCount: number,
-  phase: number,
-) => {
-  const pos = (phase - Math.floor(phase)) * paletteCount;
-  const idx = Math.floor(pos);
-  const gap = pos - idx;
-  const base = idx * 3;
-  const next = idx + 1 === paletteCount ? 0 : base + 3;
-  const baseR = palette[base]!;
-  const baseG = palette[base + 1]!;
-  const baseB = palette[base + 2]!;
-  const nextR = palette[next]!;
-  const nextG = palette[next + 1]!;
-  const nextB = palette[next + 2]!;
-  const r = baseR + (nextR - baseR) * gap;
-  const g = baseG + (nextG - baseG) * gap;
-  const b = baseB + (nextB - baseB) * gap;
-
-  buf[slot] = r;
-  buf[slot + 1] = g;
-  buf[slot + 2] = b;
+const matchColor = (r: number, g: number, b: number, tr: number, tg: number, tb: number, tolerance: number) => {
+  return Math.abs(r - tr) <= tolerance && Math.abs(g - tg) <= tolerance && Math.abs(b - tb) <= tolerance;
 };
 
-const paintBlend = (
-  buf: Float32Array,
-  slot: number,
-  palette: number[],
-  paletteCount: number,
-  phase: number,
-  amt: number,
-) => {
-  const pos = (phase - Math.floor(phase)) * paletteCount;
-  const idx = Math.floor(pos);
-  const gap = pos - idx;
-  const base = idx * 3;
-  const next = idx + 1 === paletteCount ? 0 : base + 3;
-  const baseR = palette[base]!;
-  const baseG = palette[base + 1]!;
-  const baseB = palette[base + 2]!;
-  const nextR = palette[next]!;
-  const nextG = palette[next + 1]!;
-  const nextB = palette[next + 2]!;
-  const r = baseR + (nextR - baseR) * gap;
-  const g = baseG + (nextG - baseG) * gap;
-  const b = baseB + (nextB - baseB) * gap;
-  const prevR = buf[slot]!;
-  const prevG = buf[slot + 1]!;
-  const prevB = buf[slot + 2]!;
-
-  buf[slot] = prevR + (r - prevR) * amt;
-  buf[slot + 1] = prevG + (g - prevG) * amt;
-  buf[slot + 2] = prevB + (b - prevB) * amt;
-};
+const epsForBuf = (buf: Float32Array | Uint16Array) => (isUint16(buf) ? eps16 : eps);
 
 const applyBoth = (
   buffer: RainbowBuffer,
@@ -277,31 +301,29 @@ const applyBoth = (
   const fg = buffer.buffers.fg;
   const bg = buffer.buffers.bg;
   const char = buffer.buffers.char;
+  const fgEps = epsForBuf(fg);
+  const bgEps = epsForBuf(bg);
 
   for (let y = 0, cell = 0, slot = 0; y < height; y++) {
     let fgPhase = y * fgRow + fgShift;
     let bgPhase = y * bgRow + bgShift;
 
     for (let x = 0; x < width; x++, cell++, slot += 4) {
-      const r = fg[slot]!;
-      const g = fg[slot + 1]!;
-      const b = fg[slot + 2]!;
+      const [r, g, b] = readColor(fg, slot);
 
       if (
-        (Math.abs(r - textR) <= eps && Math.abs(g - textG) <= eps && Math.abs(b - textB) <= eps) ||
-        (Math.abs(r - mutedR) <= eps && Math.abs(g - mutedG) <= eps && Math.abs(b - mutedB) <= eps)
+        matchColor(r, g, b, textR, textG, textB, fgEps) ||
+        matchColor(r, g, b, mutedR, mutedG, mutedB, fgEps)
       ) {
         paintFull(fg, slot, palette, paletteCount, fgPhase);
       }
 
-      const br = bg[slot]!;
-      const bgg = bg[slot + 1]!;
-      const bb = bg[slot + 2]!;
+      const [br, bgg, bb] = readColor(bg, slot);
       const matchBg =
-        (Math.abs(br - bg0r) <= eps && Math.abs(bgg - bg0g) <= eps && Math.abs(bb - bg0b) <= eps) ||
-        (Math.abs(br - bg1r) <= eps && Math.abs(bgg - bg1g) <= eps && Math.abs(bb - bg1b) <= eps) ||
-        (Math.abs(br - bg2r) <= eps && Math.abs(bgg - bg2g) <= eps && Math.abs(bb - bg2b) <= eps) ||
-        (Math.abs(br - bg3r) <= eps && Math.abs(bgg - bg3g) <= eps && Math.abs(bb - bg3b) <= eps);
+        matchColor(br, bgg, bb, bg0r, bg0g, bg0b, bgEps) ||
+        matchColor(br, bgg, bb, bg1r, bg1g, bg1b, bgEps) ||
+        matchColor(br, bgg, bb, bg2r, bg2g, bg2b, bgEps) ||
+        matchColor(br, bgg, bb, bg3r, bg3g, bg3b, bgEps);
 
       if (matchBg) {
         const rise = Math.sin((bgPhase - Math.floor(bgPhase)) * pi);
@@ -310,10 +332,10 @@ const applyBoth = (
 
         if (
           char[cell] === top &&
-          ((Math.abs(r - bg0r) <= eps && Math.abs(g - bg0g) <= eps && Math.abs(b - bg0b) <= eps) ||
-            (Math.abs(r - bg1r) <= eps && Math.abs(g - bg1g) <= eps && Math.abs(b - bg1b) <= eps) ||
-            (Math.abs(r - bg2r) <= eps && Math.abs(g - bg2g) <= eps && Math.abs(b - bg2b) <= eps) ||
-            (Math.abs(r - bg3r) <= eps && Math.abs(g - bg3g) <= eps && Math.abs(b - bg3b) <= eps))
+          (matchColor(r, g, b, bg0r, bg0g, bg0b, fgEps) ||
+            matchColor(r, g, b, bg1r, bg1g, bg1b, fgEps) ||
+            matchColor(r, g, b, bg2r, bg2g, bg2b, fgEps) ||
+            matchColor(r, g, b, bg3r, bg3g, bg3b, fgEps))
         ) {
           paintBlend(fg, slot, palette, paletteCount, bgPhase, amt);
         }
@@ -342,17 +364,16 @@ const applyFgOnly = (
   const width = buffer.width;
   const height = buffer.height;
   const fg = buffer.buffers.fg;
+  const fgEps = epsForBuf(fg);
 
   for (let y = 0, slot = 0; y < height; y++) {
     let fgPhase = y * fgRow + fgShift;
 
     for (let x = 0; x < width; x++, slot += 4) {
-      const r = fg[slot]!;
-      const g = fg[slot + 1]!;
-      const b = fg[slot + 2]!;
+      const [r, g, b] = readColor(fg, slot);
       if (
-        (Math.abs(r - textR) <= eps && Math.abs(g - textG) <= eps && Math.abs(b - textB) <= eps) ||
-        (Math.abs(r - mutedR) <= eps && Math.abs(g - mutedG) <= eps && Math.abs(b - mutedB) <= eps)
+        matchColor(r, g, b, textR, textG, textB, fgEps) ||
+        matchColor(r, g, b, mutedR, mutedG, mutedB, fgEps)
       ) {
         paintFull(fg, slot, palette, paletteCount, fgPhase);
       }
@@ -387,22 +408,20 @@ const applyBgOnly = (
   const fg = buffer.buffers.fg;
   const bg = buffer.buffers.bg;
   const char = buffer.buffers.char;
+  const bgEps = epsForBuf(bg);
+  const fgEps = epsForBuf(fg);
 
   for (let y = 0, cell = 0, slot = 0; y < height; y++) {
     let bgPhase = y * bgRow + bgShift;
 
     for (let x = 0; x < width; x++, cell++, slot += 4) {
-      const r = fg[slot]!;
-      const g = fg[slot + 1]!;
-      const b = fg[slot + 2]!;
-      const br = bg[slot]!;
-      const bgg = bg[slot + 1]!;
-      const bb = bg[slot + 2]!;
+      const [r, g, b] = readColor(fg, slot);
+      const [br, bgg, bb] = readColor(bg, slot);
       const matchBg =
-        (Math.abs(br - bg0r) <= eps && Math.abs(bgg - bg0g) <= eps && Math.abs(bb - bg0b) <= eps) ||
-        (Math.abs(br - bg1r) <= eps && Math.abs(bgg - bg1g) <= eps && Math.abs(bb - bg1b) <= eps) ||
-        (Math.abs(br - bg2r) <= eps && Math.abs(bgg - bg2g) <= eps && Math.abs(bb - bg2b) <= eps) ||
-        (Math.abs(br - bg3r) <= eps && Math.abs(bgg - bg3g) <= eps && Math.abs(bb - bg3b) <= eps);
+        matchColor(br, bgg, bb, bg0r, bg0g, bg0b, bgEps) ||
+        matchColor(br, bgg, bb, bg1r, bg1g, bg1b, bgEps) ||
+        matchColor(br, bgg, bb, bg2r, bg2g, bg2b, bgEps) ||
+        matchColor(br, bgg, bb, bg3r, bg3g, bg3b, bgEps);
 
       if (matchBg) {
         const rise = Math.sin((bgPhase - Math.floor(bgPhase)) * pi);
@@ -411,10 +430,10 @@ const applyBgOnly = (
 
         if (
           char[cell] === top &&
-          ((Math.abs(r - bg0r) <= eps && Math.abs(g - bg0g) <= eps && Math.abs(b - bg0b) <= eps) ||
-            (Math.abs(r - bg1r) <= eps && Math.abs(g - bg1g) <= eps && Math.abs(b - bg1b) <= eps) ||
-            (Math.abs(r - bg2r) <= eps && Math.abs(g - bg2g) <= eps && Math.abs(b - bg2b) <= eps) ||
-            (Math.abs(r - bg3r) <= eps && Math.abs(g - bg3g) <= eps && Math.abs(b - bg3b) <= eps))
+          (matchColor(r, g, b, bg0r, bg0g, bg0b, fgEps) ||
+            matchColor(r, g, b, bg1r, bg1g, bg1b, fgEps) ||
+            matchColor(r, g, b, bg2r, bg2g, bg2b, fgEps) ||
+            matchColor(r, g, b, bg3r, bg3g, bg3b, fgEps))
         ) {
           paintBlend(fg, slot, palette, paletteCount, bgPhase, amt);
         }

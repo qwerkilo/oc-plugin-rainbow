@@ -22,7 +22,7 @@ const splashCommand = `${id}.logo-splash`;
 const splashFadeInMs = 1050;
 const splashPeakHoldMs = 34;
 const splashFadeOutMs = 100;
-const splashKeybind = "ctrl+shift+r";
+export const splashKeybind = "ctrl+shift+r";
 const rainbowMinFps = 12;
 const rainbowMaxFps = 24;
 const rainbowPhaseStep = 0.05;
@@ -53,11 +53,6 @@ const num = (value: unknown, fallback: number) => {
 const bool = (value: unknown, fallback: boolean) => {
   if (typeof value !== "boolean") return fallback;
   return value;
-};
-
-const obj = (value: unknown) => {
-  if (!value || typeof value !== "object") return;
-  return value as Record<string, unknown>;
 };
 
 const splashFadeIn = (t: number) => {
@@ -136,7 +131,10 @@ const tui: TuiPlugin = async (api, options) => {
   if (options?.enabled === false) return;
 
   const [value, setValue] = createSignal(load(api, cfg(options)));
-  const keybind = api.keybind.create({ logo_splash: splashKeybind }, obj(options?.keybinds));
+  const keybindStr: string =
+    (options?.keybinds && typeof options.keybinds === "object" && "logo_splash" in options.keybinds
+      ? (options.keybinds as Record<string, unknown>).logo_splash
+      : undefined) ?? splashKeybind;
   const apply: (buffer: OptimizedBuffer, delta: number) => void = createRainbowPostProcess(
     () => api.theme.current,
     value,
@@ -295,7 +293,7 @@ const tui: TuiPlugin = async (api, options) => {
     {
       title: "Show logo splash",
       value: splashCommand,
-      keybind: keybind.get("logo_splash"),
+      keybind: keybindStr,
       category: "Plugin",
       description: "Fade to white and reveal a centered OpenCode logo screen",
       onSelect() {
