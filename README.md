@@ -2,7 +2,7 @@
 
 Theme-aware rainbow post-processing for the OpenCode TUI.
 
-![Rainbow stripe preview](https://raw.githubusercontent.com/anomalyco/oc-plugin-rainbow/main/assets/rainbow-stripe.svg)
+![Rainbow stripe preview](https://raw.githubusercontent.com/qwerkilo/oc-plugin-rainbow/main/assets/rainbow-stripe.svg)
 
 It adds:
 
@@ -12,19 +12,41 @@ It adds:
 
 ## Installation
 
-Install from the CLI:
+### 从 GitHub 安装
+
+```bash
+git clone https://github.com/qwerkilo/oc-plugin-rainbow.git
+```
+
+然后在 `tui.json` 中添加：
+
+```json
+{
+  "$schema": "https://opencode.ai/tui.json",
+  "plugin": [
+    [
+      "path/to/oc-plugin-rainbow",
+      {
+        "enabled": true
+      }
+    ]
+  ]
+}
+```
+
+### 从 CLI 安装（需先发布到 npm）
 
 ```bash
 opencode plugin oc-plugin-rainbow
 ```
 
-Or from OpenCode commands:
+或从 OpenCode 命令面板安装：
 
-1. Press `Ctrl+P`
-2. Select `Install Plugin`
-3. Enter `oc-plugin-rainbow`
+1. 按 `Ctrl+P`
+2. 选择 `Install Plugin`
+3. 输入 `oc-plugin-rainbow`
 
-Requires OpenCode `>=1.3.14`.
+Requires OpenCode `>=1.15.0`。
 
 ## Options
 
